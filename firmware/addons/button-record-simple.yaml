@@ -1,0 +1,205 @@
+# Alternative Jarvis/Uplift scanner; select this instead of button-record.yaml.
+# Every stable nonzero mask/source change emits, without waiting for release.
+packages:
+  keypad_events: !include keypad-events.yaml
+
+substitutions:
+  # Disable for an unverified keypad: no GPIO observation or input/open-drain
+  # changes. Existing movement and preset outputs retain their original modes.
+  upsy_keypad_gpio_enabled: "true"
+  upsy_keypad_scan_interval: "5ms"
+  upsy_keypad_debounce_ms: "30"
+
+  # Masks use button_bit1_pin/button_bit2_pin/button_bit4_pin/button_m_pin.
+  # Defaults match the existing Upsy preset outputs (Jarvis/Uplift wiring).
+  # Override these for a handset with different button encoding.
+  upsy_keypad_up_mask: "0x01"
+  upsy_keypad_down_mask: "0x02"
+  upsy_keypad_preset_1_mask: "0x03"
+  upsy_keypad_preset_2_mask: "0x04"
+  upsy_keypad_preset_3_mask: "0x06"
+  upsy_keypad_preset_4_mask: "0x05"
+  upsy_keypad_memory_mask: "0x0A"
+  # Physical handsets may combine Memory with another line. Firmware store
+  # commands still use upsy_keypad_memory_mask, matching the preset outputs.
+  upsy_keypad_physical_memory_mask: "${upsy_keypad_memory_mask}"
+
+esphome:
+  # Read open-drain output latches to distinguish firmware and handset activity.
+  includes:
+    - <driver/gpio.h>
+    - <soc/gpio_struct.h>
+
+event:
+  - id: !extend upsy_keypad_button_event
+    event_types:
+      - up
+      - down
+      - preset_1
+      - preset_2
+      - preset_3
+      - preset_4
+      - memory
+      - unknown
+
+# The desk/keypad wires are shared with the handset. Open-drain means Upsy only
+# pulls a line low or releases it; input remains enabled for observing the
+# physical keypad.
+output:
+  - id: !extend standing_desk_up_pin
+    pin:
+      number: ${standing_desk_up_pin}
+      allow_other_uses: true
+      mode:
+        input: ${upsy_keypad_gpio_enabled}
+        output: true
+        open_drain: ${upsy_keypad_gpio_enabled}
+
+  - id: !extend standing_desk_down_pin
+    pin:
+      number: ${standing_desk_down_pin}
+      allow_other_uses: true
+      mode:
+        input: ${upsy_keypad_gpio_enabled}
+        output: true
+        open_drain: ${upsy_keypad_gpio_enabled}
+
+  - id: !extend button_bit1
+    pin:
+      number: ${button_bit1_pin}
+      allow_other_uses: true
+      mode:
+        input: ${upsy_keypad_gpio_enabled}
+        output: true
+        open_drain: ${upsy_keypad_gpio_enabled}
+
+  - id: !extend button_bit2
+    pin:
+      number: ${button_bit2_pin}
+      allow_other_uses: true
+      mode:
+        input: ${upsy_keypad_gpio_enabled}
+        output: true
+        open_drain: ${upsy_keypad_gpio_enabled}
+
+  - id: !extend button_bit4
+    pin:
+      number: ${button_bit4_pin}
+      mode:
+        input: ${upsy_keypad_gpio_enabled}
+        output: true
+        open_drain: ${upsy_keypad_gpio_enabled}
+
+  - id: !extend button_m
+    pin:
+      number: ${button_m_pin}
+      mode:
+        input: ${upsy_keypad_gpio_enabled}
+        output: true
+        open_drain: ${upsy_keypad_gpio_enabled}
+
+# Scanner/debouncer state. Source values are:
+# 0 = idle, 1 = physical keypad, 2 = firmware-driven GPIO, 3 = mixed/ambiguous.
+globals:
+  - id: upsy_keypad_candidate_mask
+    type: uint8_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: upsy_keypad_stable_mask
+    type: uint8_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: upsy_keypad_candidate_since
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: upsy_keypad_candidate_source
+    type: uint8_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: upsy_keypad_stable_source
+    type: uint8_t
+    restore_value: no
+    initial_value: '0'
+
+interval:
+  - id: upsy_keypad_simple_scan
+    interval: ${upsy_keypad_scan_interval}
+    startup_delay: 250ms
+    then:
+      - lambda: |-
+          if (!${upsy_keypad_gpio_enabled}) {
+            return;
+          }
+
+          const int pins[] = {
+              ${button_bit1_pin}, ${button_bit2_pin},
+              ${button_bit4_pin}, ${button_m_pin}};
+          uint8_t raw_mask = 0;
+          uint8_t firmware_mask = 0;
+          for (int bit = 0; bit < 4; ++bit) {
+            const int pin = pins[bit];
+            if (gpio_get_level(static_cast<gpio_num_t>(pin)) == 0) {
+              raw_mask |= 1U << bit;
+            }
+            // Open-drain latch: zero drives low, one releases the wire.
+            const uint32_t latch = pin < 32 ? GPIO.out : GPIO.out1.val;
+            if ((latch & (1UL << (pin % 32))) == 0) {
+              firmware_mask |= 1U << bit;
+            }
+          }
+
+          const uint8_t external_mask = raw_mask & ~firmware_mask;
+          uint8_t source = 0;
+          if (firmware_mask != 0) {
+            source = external_mask != 0 ? 3 : 2;
+          } else if (raw_mask != 0) {
+            source = 1;
+          }
+          const uint8_t mask = source == 2 ? firmware_mask : raw_mask;
+          const uint32_t now = millis();
+
+          if (mask != id(upsy_keypad_candidate_mask) ||
+              source != id(upsy_keypad_candidate_source)) {
+            id(upsy_keypad_candidate_mask) = mask;
+            id(upsy_keypad_candidate_source) = source;
+            id(upsy_keypad_candidate_since) = now;
+            return;
+          }
+          if (static_cast<uint32_t>(now - id(upsy_keypad_candidate_since)) <
+              ${upsy_keypad_debounce_ms}U ||
+              (mask == id(upsy_keypad_stable_mask) &&
+               source == id(upsy_keypad_stable_source))) {
+            return;
+          }
+          id(upsy_keypad_stable_mask) = mask;
+          id(upsy_keypad_stable_source) = source;
+          if (mask == 0) {
+            return;
+          }
+
+          std::string button_name = "unknown";
+          if (source != 3) {
+            if (source == 1 && mask == ${upsy_keypad_physical_memory_mask}) {
+              button_name = "memory";
+            } else {
+              switch (mask) {
+                case ${upsy_keypad_up_mask}: button_name = "up"; break;
+                case ${upsy_keypad_down_mask}: button_name = "down"; break;
+                case ${upsy_keypad_preset_1_mask}: button_name = "preset_1"; break;
+                case ${upsy_keypad_preset_2_mask}: button_name = "preset_2"; break;
+                case ${upsy_keypad_preset_3_mask}: button_name = "preset_3"; break;
+                case ${upsy_keypad_preset_4_mask}: button_name = "preset_4"; break;
+                case ${upsy_keypad_memory_mask}:
+                  if (source == 2) button_name = "memory";
+                  break;
+              }
+            }
+          }
+          const char *source_name = source == 1 ? "physical_keypad" :
+                                    source == 2 ? "virtual_control" : "mixed_input";
+          id(upsy_keypad_publish_action)->execute(button_name, raw_mask, source_name);

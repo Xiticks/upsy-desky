@@ -1,0 +1,42 @@
+name: Keypad and Height Regression Tests
+on:
+  push:
+    paths:
+      - firmware/**
+      - tests/**
+      - .github/workflows/keypad-tests.yaml
+  pull_request:
+    paths:
+      - firmware/**
+      - tests/**
+      - .github/workflows/keypad-tests.yaml
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: tjhorner/esphome-standing-desk
+          ref: a60a3beca59b4ca8ffffa0e3fa542bc98535d3e9
+          path: upstream-test-source
+      - name: Exercise scanner and actual upstream decoders
+        env:
+          STANDING_DESK_SOURCE: upstream-test-source
+        run: python3 -m unittest discover -s tests -v
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate ESPHome configurations
+        run: |
+          pip install esphome
+          esphome -q config firmware/base.yaml > /dev/null
+          esphome -q config firmware/stock.yaml > /dev/null
+          esphome -q config firmware/debug.yaml > /dev/null
+          esphome -q config tests/keypad-events.yaml > /dev/null
+          esphome -q -s upsy_keypad_gpio_enabled false config firmware/stock.yaml > /dev/null
+          for variant in jarvis uplift omnidesk; do
+            esphome -q -s standing_desk_variant "$variant" config firmware/stock.yaml > /dev/null
+          done
+          PYTHONPATH=tests python3 -m unittest test_keypad_simple.SimpleKeypadConfigTests -v

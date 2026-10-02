@@ -5,11 +5,18 @@ esphome:
   name_add_mac_suffix: true
   min_version: "2024.6.0"
   on_boot:
-    then:
-      # Wakes up the desk and reports height
-      - uart.write:
-          id: handset_tx
-          data: [ 0x0 ]
+    # Let shared handset GPIOs settle before requesting the first height report.
+    - priority: 500
+      then:
+        - delay: 250ms
+        - uart.write:
+            id: handset_tx
+            data: [ 0x0 ]
+        - if:
+            condition:
+              lambda: 'return std::string("${standing_desk_variant}") == "auto";'
+            then:
+              - standing_desk_height.detect_decoder: desk_height
   project:
     name: tj_horner.upsy_desky
     version: "5.0.2"
@@ -35,6 +42,7 @@ substitutions:
   standing_desk_uart_rx_pin: "17"
   standing_desk_up_pin: "21"
   standing_desk_down_pin: "22"
+  standing_desk_variant: "auto"
   standing_desk_min_height: "25.2"
   standing_desk_max_height: "50.8"
 
@@ -47,12 +55,32 @@ substitutions:
 packages:
   standing_desk: github://tjhorner/esphome-standing-desk/configs/template.yaml
   addon_presets: !include addons/presets.yaml
+  # Stock Jarvis/Uplift keypad wiring; independent of the height decoder.
+  addon_button_record: !include addons/button-record-simple.yaml
   addon_stable_ids: !include addons/stable-ids.yaml
   addon_runtime_config: !include addons/runtime-config.yaml
 
 button:
   - platform: restart
     name: "Restart"
+
+# Upstream auto-detection gives each decoder one second, then stops reading
+# heights after a failed cycle. Retry only until the first valid height arrives.
+# This uses the existing action and leaves explicitly selected decoders alone.
+interval:
+  - interval: 5s
+    startup_delay: 5s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return std::string("${standing_desk_variant}") == "auto" &&
+                     id(desk_height)->get_last_read() < 0;
+          then:
+            - standing_desk_height.detect_decoder: desk_height
+            - uart.write:
+                id: handset_tx
+                data: [ 0x0 ]
 
 light:
   - platform: status_led

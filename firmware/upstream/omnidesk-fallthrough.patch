@@ -1,0 +1,19 @@
+Subject: [PATCH] standing_desk_height: mark intentional Omnidesk fallthrough
+
+Separate upstream PR: https://github.com/tjhorner/esphome-standing-desk
+Based on commit a60a3beca59b4ca8ffffa0e3fa542bc98535d3e9.
+Exclude this patch from the Upsy Desky PR. The GPIO button feature does not
+require it; the normal dependency remains unchanged until upstream releases it.
+
+diff --git a/components/standing_desk_height/omnidesk_decoder.cpp b/components/standing_desk_height/omnidesk_decoder.cpp
+index 5cad083..73c3e24 100644
+--- a/components/standing_desk_height/omnidesk_decoder.cpp
++++ b/components/standing_desk_height/omnidesk_decoder.cpp
+@@ -11,6 +11,7 @@ bool OmnideskDecoder::put(uint8_t b) {
+       state_ = HEIGHT2;
+       return false;
+     }
++    [[fallthrough]];
+   default:
+     return UpliftDecoder::put(b);
+   }

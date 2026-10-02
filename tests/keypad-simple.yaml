@@ -1,0 +1,8 @@
+# Device fixture for the comparison test, which selects the simple addon in a
+# temporary copy of base.yaml. No second keypad package is needed here.
+packages:
+  stock: !include ../firmware/stock.yaml
+
+substitutions:
+  name: keypad-simple-test
+  upsy_keypad_physical_memory_mask: "0x0A"

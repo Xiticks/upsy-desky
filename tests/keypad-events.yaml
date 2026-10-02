@@ -1,0 +1,17 @@
+# Validate the publisher with another compile-time event list and no GPIOs.
+packages:
+  keypad_events: !include ../firmware/addons/keypad-events.yaml
+
+esphome:
+  name: keypad-events-test
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+event:
+  - id: !extend upsy_keypad_button_event
+    event_types: [up, down, unknown]
