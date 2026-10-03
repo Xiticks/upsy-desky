@@ -11,9 +11,9 @@ esphome:
         - text_sensor.template.publish:
             id: upsy_keypad_last_source
             state: "none"
-        - sensor.template.publish:
+        - text_sensor.template.publish:
             id: upsy_keypad_last_raw_mask
-            state: 0
+            state: "0x00"
 
 # Repeated actions trigger events even when the text sensor value is unchanged.
 event:
@@ -38,14 +38,12 @@ text_sensor:
     icon: "mdi:source-branch"
     update_interval: never
 
-# Electrical mask for debugging keypad variants. Disabled by default to avoid
-# clutter; it can be enabled from the entity settings in Home Assistant.
-sensor:
+  # Electrical mask for debugging keypad variants. Disabled by default to avoid
+  # clutter; it can be enabled from the entity settings in Home Assistant.
   - platform: template
     id: upsy_keypad_last_raw_mask
     name: "Last Keypad Raw Mask"
     icon: "mdi:numeric"
-    accuracy_decimals: 0
     update_interval: never
     entity_category: diagnostic
     disabled_by_default: true
@@ -68,7 +66,7 @@ script:
           id(upsy_keypad_last_button).publish_state(button_name);
           id(upsy_keypad_last_source).publish_state(action_source);
           id(upsy_keypad_last_raw_mask).publish_state(
-              static_cast<float>(raw_mask));
+              str_sprintf("0x%02X", static_cast<unsigned int>(raw_mask)));
 
           // Native ESPHome event entity: no HA action permission required.
           id(upsy_keypad_button_event).trigger(button_name);
