@@ -153,6 +153,56 @@ class SimpleKeypadTests(keypad.KeypadTests):
 
 @unittest.skipUnless(importlib.util.find_spec("esphome"), "install ESPHome to check package merging")
 class SimpleKeypadConfigTests(unittest.TestCase):
+    def test_open_drain_independent_of_scanner(self):
+        from esphome.config import read_config
+        from esphome.core import CORE
+
+        cache = os.environ.get("ESPHOME_DATA_DIR", str(
+            keypad.ROOT / "firmware/.esphome"))
+        with tempfile.TemporaryDirectory(prefix="upsy-output-config-") as folder:
+            project = Path(folder)
+            shutil.copytree(keypad.ROOT / "firmware", project / "firmware",
+                            ignore=shutil.ignore_patterns(".esphome", "__pycache__"))
+            base_path = project / "firmware/base.yaml"
+            base = base_path.read_text()
+            device = project / "device.yaml"
+            cases = [(addon, enabled)
+                     for addon in ("button-record.yaml", "button-record-simple.yaml")
+                     for enabled in (True, False)] + [(None, False)]
+            for addon, enabled in cases:
+                with self.subTest(addon=addon, enabled=enabled):
+                    include = (f"  addon_button_record: !include addons/{addon}\n"
+                               if addon else "")
+                    base_path.write_text(re.sub(
+                        r"  addon_button_record: !include addons/button-record[^\n]*\n",
+                        include, base))
+                    device.write_text(
+                        "packages:\n  stock: !include firmware/stock.yaml\n"
+                        "substitutions:\n  upsy_keypad_gpio_enabled: "
+                        f'"{str(enabled).lower()}"\n')
+                    CORE.reset()
+                    CORE.config_path = device
+                    with patch.dict(os.environ, {"ESPHOME_DATA_DIR": cache}):
+                        config = read_config({}, skip_external_update=True)
+                    self.assertIsNotNone(config)
+                    outputs = {str(item["id"]): item["pin"]
+                               for item in config["output"]}
+                    self.assertEqual(set(outputs), {
+                        "standing_desk_up_pin", "standing_desk_down_pin",
+                        "button_bit1", "button_bit2", "button_bit4", "button_m"})
+                    for pin in outputs.values():
+                        self.assertEqual(pin["mode"]["input"], enabled)
+                        self.assertTrue(pin["mode"]["output"])
+                        self.assertTrue(pin["mode"]["open_drain"])
+                    for direction, bit in (("up", 1), ("down", 2)):
+                        movement = outputs[f"standing_desk_{direction}_pin"]
+                        preset = outputs[f"button_bit{bit}"]
+                        self.assertEqual(movement["number"], preset["number"])
+                        self.assertEqual(dict(movement["mode"]), dict(preset["mode"]))
+                    for uart in config["uart"]:
+                        for name in ("rx_pin", "tx_pin"):
+                            self.assertFalse(uart[name]["mode"]["open_drain"])
+
     def test_consuming_config_overrides_physical_memory(self):
         from esphome.config import read_config
         from esphome.core import CORE

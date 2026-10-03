@@ -4,8 +4,8 @@ packages:
   keypad_events: !include keypad-events.yaml
 
 substitutions:
-  # Disable for an unverified keypad: no GPIO observation or input/open-drain
-  # changes. Existing movement and preset outputs retain their original modes.
+  # Disable for an unverified keypad: no GPIO observation or input enablement.
+  # Movement and preset outputs remain open-drain independently of scanning.
   upsy_keypad_gpio_enabled: "true"
   upsy_keypad_scan_interval: "5ms"
   upsy_keypad_debounce_ms: "30"
@@ -42,9 +42,8 @@ event:
       - memory
       - unknown
 
-# The desk/keypad wires are shared with the handset. Open-drain means Upsy only
-# pulls a line low or releases it; input remains enabled for observing the
-# physical keypad.
+# Enable observation on every output sharing a handset line. Open-drain output
+# mode is provided by base.yaml and presets.yaml independently of this addon.
 output:
   - id: !extend standing_desk_up_pin
     pin:
@@ -52,8 +51,6 @@ output:
       allow_other_uses: true
       mode:
         input: ${upsy_keypad_gpio_enabled}
-        output: true
-        open_drain: ${upsy_keypad_gpio_enabled}
 
   - id: !extend standing_desk_down_pin
     pin:
@@ -61,8 +58,6 @@ output:
       allow_other_uses: true
       mode:
         input: ${upsy_keypad_gpio_enabled}
-        output: true
-        open_drain: ${upsy_keypad_gpio_enabled}
 
   - id: !extend button_bit1
     pin:
@@ -70,8 +65,6 @@ output:
       allow_other_uses: true
       mode:
         input: ${upsy_keypad_gpio_enabled}
-        output: true
-        open_drain: ${upsy_keypad_gpio_enabled}
 
   - id: !extend button_bit2
     pin:
@@ -79,24 +72,18 @@ output:
       allow_other_uses: true
       mode:
         input: ${upsy_keypad_gpio_enabled}
-        output: true
-        open_drain: ${upsy_keypad_gpio_enabled}
 
   - id: !extend button_bit4
     pin:
       number: ${button_bit4_pin}
       mode:
         input: ${upsy_keypad_gpio_enabled}
-        output: true
-        open_drain: ${upsy_keypad_gpio_enabled}
 
   - id: !extend button_m
     pin:
       number: ${button_m_pin}
       mode:
         input: ${upsy_keypad_gpio_enabled}
-        output: true
-        open_drain: ${upsy_keypad_gpio_enabled}
 
 # Scanner/debouncer state. Source values are:
 # 0 = idle, 1 = physical keypad, 2 = firmware-driven GPIO, 3 = mixed/ambiguous.

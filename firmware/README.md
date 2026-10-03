@@ -35,11 +35,12 @@ commands from physical presses. A held physical button emits once; a debounced
 full release re-arms detection. Partial preset contact releases do not emit
 Up/Down events. Firmware Memory followed by a preset emits both commands.
 
-Both scanner addons define their own stock ESP32 GPIO modes, default button
-masks, and debounce variables. They use the same four-line encoding and
-Memory/store mappings for the Jarvis/Uplift keypad configuration, independently
-of the selected height decoder. Existing pin and mask substitutions and Home
-Assistant entity IDs remain unchanged.
+Both scanner addons define their own input observation settings, default button
+masks, and debounce variables. Open-drain outputs are configured in `base.yaml`
+and `presets.yaml`, independently of scanning. They use the same four-line
+encoding and Memory/store mappings for the Jarvis/Uplift keypad configuration,
+independently of the selected height decoder. Existing pin and mask
+substitutions and Home Assistant entity IDs remain unchanged.
 
 The upstream desk configurations provide the same four preset-control lines for
 Fully Jarvis and Uplift v2. Omnidesk has a height decoder but no keypad
@@ -61,9 +62,11 @@ substitutions:
   upsy_keypad_gpio_enabled: "false"
 ```
 
-This stops keypad GPIO reads and leaves input/open-drain mode disabled on the
-shared outputs. Existing movement and preset outputs keep their original output
-modes; this option does not establish that those controls support a new desk.
+This stops keypad GPIO reads and disables input observation on the shared
+outputs. Movement and preset outputs remain open-drain, releasing inactive
+lines to the stock board's pull-ups even when the scanner addon is removed.
+Custom hardware must provide suitable pull-ups. This option does not establish
+that those controls support a new desk.
 No physical or virtual keypad events are inferred while the adapter is disabled.
 
 Masks use `button_bit1_pin`, `button_bit2_pin`, `button_bit4_pin`, and
@@ -104,15 +107,16 @@ wiring. Select it directly in the existing `packages:` block of `base.yaml`:
   addon_button_record: !include addons/button-record-simple.yaml
 ```
 
-Each version contains its settings, GPIO modes, and debounce variables, and
-includes the `keypad-events.yaml` publisher. The simple version does not include
-the full scanner. Select exactly one version;
+Each version contains its settings, input observation modes, and debounce
+variables, and includes the `keypad-events.yaml` publisher. The simple version
+does not include the full scanner. Select exactly one version;
 remove any separate `keypad_simple` package entry from the device configuration.
 The simple scanner has no release/re-arm state. It keeps
 whole-mask/source debounce, output-latch source detection, mixed-input rejection,
-and input/open-drain GPIO modes. It omits the normal scanner's compile-time
-UART/wake pin and physical Memory-mask assertions, assuming the verified pinout
-and mappings. Incorrect overrides are no longer rejected by those assertions.
+and input observation of open-drain outputs. It omits the normal scanner's
+compile-time UART/wake pin and physical Memory-mask assertions, assuming the
+verified pinout and mappings. Incorrect overrides are no longer rejected by
+those assertions.
 
 The simpler scanner emits each stable nonzero mask/source change. A held button
 still emits once, but another stable pattern can emit without a full release.
