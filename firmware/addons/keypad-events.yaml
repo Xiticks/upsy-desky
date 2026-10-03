@@ -1,0 +1,74 @@
+# Keypad entities and reporting, independent of GPIO wiring and height protocol.
+# Each adapter must extend upsy_keypad_button_event with its event_types list.
+# Sources: physical_keypad, virtual_control, or mixed_input.
+esphome:
+  on_boot:
+    - priority: -100
+      then:
+        - text_sensor.template.publish:
+            id: upsy_keypad_last_button
+            state: "none"
+        - text_sensor.template.publish:
+            id: upsy_keypad_last_source
+            state: "none"
+        - sensor.template.publish:
+            id: upsy_keypad_last_raw_mask
+            state: 0
+
+# Repeated actions trigger events even when the text sensor value is unchanged.
+event:
+  - platform: template
+    id: upsy_keypad_button_event
+    name: "Keypad Button"
+    icon: "mdi:gesture-tap-button"
+    device_class: button
+
+# Persistent dashboard/diagnostic state. Use the event entity above for primary
+# automations because a text sensor does not change when the same value repeats.
+text_sensor:
+  - platform: template
+    id: upsy_keypad_last_button
+    name: "Last Keypad Button"
+    icon: "mdi:button-pointer"
+    update_interval: never
+
+  - platform: template
+    id: upsy_keypad_last_source
+    name: "Last Keypad Source"
+    icon: "mdi:source-branch"
+    update_interval: never
+
+# Electrical mask for debugging keypad variants. Disabled by default to avoid
+# clutter; it can be enabled from the entity settings in Home Assistant.
+sensor:
+  - platform: template
+    id: upsy_keypad_last_raw_mask
+    name: "Last Keypad Raw Mask"
+    icon: "mdi:numeric"
+    accuracy_decimals: 0
+    update_interval: never
+    entity_category: diagnostic
+    disabled_by_default: true
+
+# Shared publisher used by both physical detection and virtual preset controls.
+# It updates local sensor state before triggering the event. The native API can
+# batch sensor updates while sending events immediately, so Home Assistant may
+# still see the previous source when it receives an event. These text sensors
+# describe the latest action; they are not an atomic payload for each event.
+script:
+  - id: upsy_keypad_publish_action
+    mode: queued
+    max_runs: 16
+    parameters:
+      button_name: string
+      raw_mask: int
+      action_source: string
+    then:
+      - lambda: |-
+          id(upsy_keypad_last_button).publish_state(button_name);
+          id(upsy_keypad_last_source).publish_state(action_source);
+          id(upsy_keypad_last_raw_mask).publish_state(
+              static_cast<float>(raw_mask));
+
+          // Native ESPHome event entity: no HA action permission required.
+          id(upsy_keypad_button_event).trigger(button_name);

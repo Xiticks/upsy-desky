@@ -5,11 +5,11 @@ esphome:
   name_add_mac_suffix: true
   min_version: "2024.6.0"
   on_boot:
-    then:
-      # Wakes up the desk and reports height
-      - uart.write:
-          id: handset_tx
-          data: [ 0x0 ]
+    - then:
+        # Wakes up the desk and reports height
+        - uart.write:
+            id: handset_tx
+            data: [ 0x0 ]
   project:
     name: tj_horner.upsy_desky
     version: "5.0.2"
@@ -47,6 +47,7 @@ substitutions:
 packages:
   standing_desk: github://tjhorner/esphome-standing-desk/configs/template.yaml
   addon_presets: !include addons/presets.yaml
+  addon_button_record: !include addons/button-record-simple.yaml
   addon_stable_ids: !include addons/stable-ids.yaml
   addon_runtime_config: !include addons/runtime-config.yaml
 
