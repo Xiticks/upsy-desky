@@ -3,13 +3,18 @@ on:
   push:
     paths:
       - firmware/**
+      - reversing-firmware/**
       - tests/**
       - .github/workflows/keypad-tests.yaml
   pull_request:
     paths:
       - firmware/**
+      - reversing-firmware/**
       - tests/**
       - .github/workflows/keypad-tests.yaml
+
+permissions:
+  contents: read
 
 jobs:
   regression:
@@ -34,9 +39,11 @@ jobs:
           esphome -q config firmware/base.yaml > /dev/null
           esphome -q config firmware/stock.yaml > /dev/null
           esphome -q config firmware/debug.yaml > /dev/null
+          esphome -q config reversing-firmware/config.yaml > /dev/null
           esphome -q config tests/keypad-events.yaml > /dev/null
           esphome -q -s upsy_keypad_gpio_enabled false config firmware/stock.yaml > /dev/null
           for variant in jarvis uplift omnidesk; do
             esphome -q -s standing_desk_variant "$variant" config firmware/stock.yaml > /dev/null
           done
           PYTHONPATH=tests python3 -m unittest test_keypad_simple.SimpleKeypadConfigTests -v
+          PYTHONPATH=tests python3 -m unittest test_firmware_config -v

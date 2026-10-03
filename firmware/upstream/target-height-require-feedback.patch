@@ -1,0 +1,49 @@
+Subject: [PATCH] template: require a valid height before target movement
+
+Proposed upstream change: https://github.com/tjhorner/esphome-standing-desk
+Based on commit a60a3beca59b4ca8ffffa0e3fa542bc98535d3e9.
+An unknown height (-1) currently selects Up for every positive target and can
+hold it for twenty seconds. Require positive feedback before driving either
+output. This does not add stale-height detection or serialize movement commands.
+Valid-height direction, tolerances, timeouts, and output sequences are unchanged.
+This patch is not applied by the Upsy Desky firmware packages.
+
+diff --git a/configs/template.yaml b/configs/template.yaml
+--- a/configs/template.yaml
++++ b/configs/template.yaml
+@@ -46,18 +46,22 @@
+       then:
+         - if:
+             condition:
+-              lambda: "return id(desk_height)->get_last_read() > x;"
++              lambda: "return id(desk_height)->get_last_read() > 0;"
+             then:
+-              - output.turn_on: standing_desk_down_pin
+-              - wait_until:
++              - if:
+                   condition:
+-                    lambda: "return id(desk_height)->get_last_read() <= x + 0.4;"
+-                  timeout: 20s
+-              - output.turn_off: standing_desk_down_pin
+-            else:
+-              - output.turn_on: standing_desk_up_pin
+-              - wait_until:
+-                  condition:
+-                    lambda: "return id(desk_height)->get_last_read() >= x - 0.4;"
+-                  timeout: 20s
+-              - output.turn_off: standing_desk_up_pin
++                    lambda: "return id(desk_height)->get_last_read() > x;"
++                  then:
++                    - output.turn_on: standing_desk_down_pin
++                    - wait_until:
++                        condition:
++                          lambda: "return id(desk_height)->get_last_read() <= x + 0.4;"
++                        timeout: 20s
++                    - output.turn_off: standing_desk_down_pin
++                  else:
++                    - output.turn_on: standing_desk_up_pin
++                    - wait_until:
++                        condition:
++                          lambda: "return id(desk_height)->get_last_read() >= x - 0.4;"
++                        timeout: 20s
++                    - output.turn_off: standing_desk_up_pin

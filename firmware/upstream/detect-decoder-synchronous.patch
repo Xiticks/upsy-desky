@@ -1,0 +1,21 @@
+Subject: [PATCH] standing_desk_height: declare decoder action synchronous
+
+Proposed upstream change: https://github.com/tjhorner/esphome-standing-desk
+Based on commit a60a3beca59b4ca8ffffa0e3fa542bc98535d3e9.
+DetectDecoderAction::play starts detection and returns immediately; it does not
+defer the automation continuation. This targets the tested ESPHome 2026.9 API;
+older registries without the synchronous keyword need a compatibility change.
+This patch is not applied by the Upsy Desky firmware packages.
+
+diff --git a/components/standing_desk_height/sensor.py b/components/standing_desk_height/sensor.py
+--- a/components/standing_desk_height/sensor.py
++++ b/components/standing_desk_height/sensor.py
+@@ -18,7 +18,7 @@
+     }
+ )
+ 
+-@automation.register_action("standing_desk_height.detect_decoder", DetectDecoderAction, DETECT_DECODER_SCHEMA)
++@automation.register_action("standing_desk_height.detect_decoder", DetectDecoderAction, DETECT_DECODER_SCHEMA, synchronous=True)
+ async def detect_decoder_to_code(config, action_id, template_arg, args):
+     paren = await cg.get_variable(config[CONF_ID])
+     return cg.new_Pvariable(action_id, template_arg, paren)

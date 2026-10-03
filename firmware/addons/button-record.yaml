@@ -19,10 +19,10 @@ substitutions:
   upsy_keypad_preset_2_mask: "0x04"
   upsy_keypad_preset_3_mask: "0x06"
   upsy_keypad_preset_4_mask: "0x05"
-  upsy_keypad_memory_mask: "0x0A"
+  upsy_keypad_memory_mask: "0x08"
   # Physical handsets may combine Memory with another line. Firmware store
   # commands still use upsy_keypad_memory_mask, matching the preset outputs.
-  upsy_keypad_physical_memory_mask: "${upsy_keypad_memory_mask}"
+  upsy_keypad_physical_memory_mask: "0x0A"
 
 esphome:
   # Read open-drain output latches to distinguish firmware and handset activity.
@@ -189,13 +189,13 @@ interval:
               (line_is_low(${button_bit1_pin}) ? 0x01 : 0x00) |
               (line_is_low(${button_bit2_pin}) ? 0x02 : 0x00) |
               (line_is_low(${button_bit4_pin}) ? 0x04 : 0x00) |
-              (line_is_low(${button_m_pin})    ? 0x0A : 0x00);
+              (line_is_low(${button_m_pin})    ? 0x08 : 0x00);
 
           const uint8_t firmware_driven_mask =
               (output_is_driving_low(${button_bit1_pin}) ? 0x01 : 0x00) |
               (output_is_driving_low(${button_bit2_pin}) ? 0x02 : 0x00) |
               (output_is_driving_low(${button_bit4_pin}) ? 0x04 : 0x00) |
-              (output_is_driving_low(${button_m_pin})    ? 0x0A : 0x00);
+              (output_is_driving_low(${button_m_pin})    ? 0x08 : 0x00);
 
           // Split external pull-downs from GPIOs deliberately driven by Upsy.
           // Both are decoded below. If both sources are active at once, their

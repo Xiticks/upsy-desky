@@ -30,9 +30,12 @@ api:
 web_server:
   port: 80
   version: 2
+  # Keep plaintext firmware uploads limited to captive-portal recovery.
+  ota: false
   js_url: "https://upsy-desky.tjhorner.dev/esphome-webserver/www.js"
 
 ota:
+  # The device configuration supplies its own password or encryption settings.
   - platform: esphome
 
 dashboard_import:

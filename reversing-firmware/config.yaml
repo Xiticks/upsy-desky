@@ -19,11 +19,12 @@ uart:
     id: handset_tx
     baud_rate: 9600
     rx_pin: 17
-    debug: &uart_debug
-      direction: RX
-      dummy_receiver: true
-      after:
-        timeout: 50ms
+    debug:
+      <<: &uart_debug
+        direction: RX
+        dummy_receiver: true
+        after:
+          timeout: 50ms
       sequence:
         - lambda: UARTDebug::log_hex(uart::UART_DIRECTION_TX, bytes, ':');
   - # Direction: Control Box -> Handset
@@ -47,3 +48,4 @@ web_server:
   port: 80
 
 ota:
+  - platform: esphome

@@ -16,8 +16,8 @@ Major parts of the config are separated into "addons" so they can be easily incl
 - `runtime-config.yaml`: Adds support for runtime configuration options (you might want to remove this if you are configuring everything via ESPHome yaml)
 - `bluetooth-proxy.yaml`: Contains the necessary configuration to use the Upsy Desky as a [Bluetooth Proxy](https://esphome.io/components/bluetooth_proxy.html)
 - `stable-ids.yaml`: Contains configuration necessary to keep some entity IDs stable via the HTTP API
-- `button-record.yaml`: Full Jarvis/Uplift GPIO scanner; included by `base.yaml` by default
-- `button-record-simple.yaml`: Alternative scanner, selectable instead of the full scanner
+- `button-record-simple.yaml`: Jarvis/Uplift GPIO scanner; included by `base.yaml` by default
+- `button-record.yaml`: Alternative scanner that requires a physical release before another press
 - `keypad-events.yaml`: Keypad entities and reporting without GPIO or protocol handling; included by the adapter
 
 ## Physical keypad detection
@@ -31,9 +31,10 @@ separate events. `Last Keypad Button`, `Last Keypad Source`, and the disabled
 The scanner samples the four active-low keypad wires every 5ms and debounces
 complete masks for 30ms. Shared outputs use input-enabled, open-drain mode so
 idle releases the wires for the handset. Output latches distinguish firmware
-commands from physical presses. A held physical button emits once; a debounced
-full release re-arms detection. Partial preset contact releases do not emit
-Up/Down events. Firmware Memory followed by a preset emits both commands.
+commands from physical presses. The default simple scanner emits each stable
+nonzero mask/source change. A held button emits once, and firmware Memory
+followed by a preset emits both commands. The full scanner additionally requires
+a debounced physical release; see the comparison below.
 
 Both scanner addons define their own stock ESP32 GPIO modes, default button
 masks, and debounce variables. They use the same four-line encoding and
@@ -69,7 +70,8 @@ No physical or virtual keypad events are inferred while the adapter is disabled.
 Masks use `button_bit1_pin`, `button_bit2_pin`, `button_bit4_pin`, and
 `button_m_pin` in that order. Defaults match the existing preset outputs:
 Up=`0x01`, Down=`0x02`, Preset 1=`0x03`, Preset 2=`0x04`, Preset 3=`0x06`,
-Preset 4=`0x05`, Memory=`0x08`. Override `upsy_keypad_up_mask`,
+Preset 4=`0x05`, virtual Memory=`0x08`. Physical Memory defaults to `0x0A`, as
+observed on Jarvis. Override `upsy_keypad_up_mask`,
 `upsy_keypad_down_mask`, `upsy_keypad_preset_1_mask` through
 `upsy_keypad_preset_4_mask`, and `upsy_keypad_memory_mask` for other encodings.
 Use distinct nonzero masks and verify the raw-mask diagnostic. These settings
@@ -85,10 +87,12 @@ substitutions:
   upsy_keypad_physical_memory_mask: "0x0A"
 ```
 
-This changes only physical Memory recognition. Keep `upsy_keypad_memory_mask`
+This is the current default and changes only physical Memory recognition.
+Keep `upsy_keypad_memory_mask`
 at `0x08` for the existing firmware store commands, which drive Memory alone.
-The physical setting defaults to `upsy_keypad_memory_mask` for backward
-compatibility. The raw diagnostic remains the actual observed mask, and mixed
+The physical and virtual settings are independent. A handset reporting physical
+Memory as `8` must set `upsy_keypad_physical_memory_mask: "0x08"` explicitly.
+The raw diagnostic remains the actual observed mask, and mixed
 sources still emit `unknown` even when their combined mask equals Memory.
 
 Physical and firmware activity on different wires emits `unknown`/`mixed_input`
@@ -97,10 +101,10 @@ already driven low by firmware is indistinguishable. Presses shorter than the
 debounce period are filtered. UART-only handsets require protocol-specific
 captures and are not supported by this GPIO scanner.
 
-## Optional simplified scanner comparison
+## Scanner selection and comparison
 
-`button-record-simple.yaml` is an opt-in alternative for the same Jarvis/Uplift
-wiring. Select it directly in the existing `packages:` block of `base.yaml`:
+`button-record-simple.yaml` is the default for the Jarvis/Uplift wiring. The
+existing `packages:` block of `base.yaml` selects it directly:
 
 ```yaml
   addon_button_record: !include addons/button-record-simple.yaml
@@ -155,7 +159,7 @@ The example uses the physical Memory mask observed on the user's Jarvis; other
 handsets should retain their verified setting. Build and install through ESPHome
 as usual. To return to the full scanner, change the base include back to
 `addons/button-record.yaml` and rebuild. The repository's default base include
-continues to select the full scanner.
+selects the simple scanner.
 
 ## Reusing keypad reporting
 
@@ -203,6 +207,76 @@ batching delay, but separate entity updates are not an atomic payload.
 
 The base package remains usable without `api`, including MQTT configurations.
 
+## Device authentication and OTA
+
+`base.yaml` supplies neither API nor OTA configuration. `stock.yaml` enables
+both, and `debug.yaml` inherits them, without selecting a password or encryption
+key. Put credentials in the device configuration, not in reusable packages.
+
+For encrypted native OTA with ESPHome 2026.9 or newer:
+
+```yaml
+api:
+  encryption:
+    key: !secret upsy_desky_api_key
+ota:
+  - platform: esphome
+    encryption:
+```
+
+OTA inherits the API key. Remove any OTA `password`, including an empty string;
+password and encryption cannot coexist. API encryption alone offers encrypted
+OTA but does not require it. Stock and device OTA entries merge into one native
+OTA instance.
+
+An existing device must first run ESPHome 2026.9 or newer with its existing API
+key, keeping its current OTA password and leaving out OTA `encryption`. After
+that firmware offers encryption, add the OTA encryption block and remove the
+password. A serial installation can require encryption immediately. See
+[ESPHome's encrypted OTA migration instructions](https://esphome.io/components/ota/esphome/#enabling-encryption-on-an-existing-device).
+
+Stock firmware disables web-server firmware uploads during normal operation.
+Captive-portal uploads remain available for recovery while the fallback portal
+is active. This closes the ordinary HTTP upload path alongside encrypted native
+OTA; it does not authenticate the HTTP desk controls or fallback provisioning.
+
+Stock defaults are intended for initial provisioning: the API and native OTA
+have no configured credentials, the web server has no authentication, the
+fallback AP has a shared password, and Improv needs no physical authorization.
+For an installed device, supply API/OTA encryption and a unique fallback AP
+password, and remove the web server with `web_server: !remove` if it is unused.
+If retaining HTTP controls, configure `web_server.auth` separately; API/OTA
+encryption does not protect those controls. Keep provisioning settings suitable
+for the intended deployment rather than adding fixed secrets to packages.
+
+## Proposed upstream fixes
+
+The height decoder and target-height automation remain upstream dependencies.
+The files under `upstream/` are proposed patches against standing-desk commit
+`a60a3beca59b4ca8ffffa0e3fa542bc98535d3e9`; firmware does not apply them:
+
+- `omnidesk-fallthrough.patch`: annotates intentional decoder fallthrough.
+- `jarvis-height-length.patch`: rejects checksummed height payloads shorter than
+  the two bytes read by the decoder, preserving subsequent valid reports.
+- `target-height-require-feedback.patch`: refuses target movement while height
+  is unknown. Valid-height movement retains its existing sequence and timeout.
+- `detect-decoder-synchronous.patch`: declares the existing detection action
+  synchronous to address ESPHome 2026.9's warning. It targets the new action
+  registry API; check compatibility before applying it with older ESPHome versions.
+
+The unpatched target-height controller can drive Up for up to 20s when height
+is unknown. The proposed guard does not detect stale feedback or serialize
+overlapping commands. Those changes need separate design and hardware tests.
+Runtime min/max settings also need valid ordering and limits matching the
+handset's units; changing `unit_of_measurement` changes the label, not the raw
+height or configured limits. Verify feedback and limits before automating motion.
+
+Remote packages and components currently follow their upstream default branches,
+while decoder tests use a fixed commit. Pin matched package/component revisions
+for reproducible releases, and test upgrades before changing those revisions.
+The existing dashboard import points to upstream `v4.0.2`; importing it does not
+retain this fork's keypad changes. Use this checkout's local package when testing.
+
 ## Regression checks
 
 Run `python3 -m unittest discover -s tests -v` from the repository root with
@@ -227,6 +301,11 @@ and only one scanner, while preserving outputs, UART, height/movement controls,
 reporting entities, boot actions, and the height retry interval. CI runs this
 check after installing ESPHome.
 
+`test_firmware_config.py` checks credential-free packages, device-owned encrypted
+OTA/password merging, disabled GPIO modes, height entity extensions, and native
+OTA plus both UART debug directions in the reverse-engineering firmware.
+It requires ESPHome; the encrypted OTA checks require version 2026.9 or newer.
+
 Set `STANDING_DESK_SOURCE` to a checkout of `tjhorner/esphome-standing-desk` to
 also compile its actual height component and decoders against simulated UART,
 GPIO, time, and publication. Tests exercise all three height protocols,
@@ -236,3 +315,7 @@ decoder protocol, Uplift packets come from the
 [reverse-engineering guide](https://upsy-desky.tjhorner.dev/docs/advanced/reverse-engineering/),
 and Omnidesk packets are synthesized from its decoder. Only Jarvis has been
 physically tested; these tests do not validate other handsets' electronics.
+
+`test_upstream_patches.py` applies the new proposals to a temporary dependency
+copy and tests malformed Jarvis frames, subsequent height updates, and the
+target-movement guard. It never modifies the installed upstream checkout.

@@ -191,7 +191,7 @@ class KeypadTests(unittest.TestCase):
     def test_all_buttons_and_repeated_presses(self):
         self.run_cpp(r"""
         int main() {
-          const uint8_t masks[] = {1, 2, 3, 4, 6, 5, 8, 15};
+          const uint8_t masks[] = {1, 2, 3, 4, 6, 5, 10, 15};
           const char *buttons[] = {"up", "down", "preset_1", "preset_2",
                                    "preset_3", "preset_4", "memory", "unknown"};
           for (int n = 0; n < 8; ++n) {
@@ -230,8 +230,20 @@ class KeypadTests(unittest.TestCase):
     def test_virtual_memory_and_mixed_sources(self):
         self.run_cpp(r"""
         int main() {
+          const uint8_t presets[] = {3, 4, 6, 5};
+          const char *buttons[] = {"preset_1", "preset_2", "preset_3", "preset_4"};
+          for (int n = 0; n < 4; ++n) {
+            reset_scanner();
+            hold(0, 8);
+            expect("memory", "virtual_control", 8);
+            hold(0, presets[n]);
+            assert(publisher.events.size() == 2);
+            expect(buttons[n], "virtual_control", presets[n]);
+          }
           reset_scanner();
-          hold(0, 8); hold(0, 3); // Set Preset has no full release between actions.
+          hold(0, 8);
+          expect("memory", "virtual_control", 8);
+          hold(0, 3); // Set Preset has no full release between actions.
           assert(publisher.events.size() == 2);
           expect("preset_1", "virtual_control", 3);
           hold(4, 3);
@@ -286,7 +298,7 @@ class KeypadTests(unittest.TestCase):
         self.run_cpp("int main() {}", {"upsy_keypad_physical_memory_mask": "0x02"},
                      expected_error="Physical Memory mask must differ")
 
-    def test_memory_mask_override_remains_backward_compatible(self):
+    def test_memory_mask_override(self):
         self.run_cpp(r"""
         int main() {
           reset_scanner(); hold(10);

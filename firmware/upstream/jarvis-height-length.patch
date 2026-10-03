@@ -1,0 +1,20 @@
+Subject: [PATCH] standing_desk_height: reject incomplete Jarvis height payloads
+
+Proposed upstream change: https://github.com/tjhorner/esphome-standing-desk
+Based on commit a60a3beca59b4ca8ffffa0e3fa542bc98535d3e9.
+Height decoding reads two bytes. Reject shorter checksummed HEIGHT messages
+without changing framing or valid height reports.
+This patch is not applied by the Upsy Desky firmware packages.
+
+diff --git a/components/standing_desk_height/jarvis_decoder.cpp b/components/standing_desk_height/jarvis_decoder.cpp
+--- a/components/standing_desk_height/jarvis_decoder.cpp
++++ b/components/standing_desk_height/jarvis_decoder.cpp
+@@ -67,7 +67,7 @@
+     return false;
+   }
+ 
+-  return complete && cmd == HEIGHT;
++  return complete && cmd == HEIGHT && argc >= 2;
+ }
+ 
+ float JarvisDecoder::decode() {

@@ -1,1 +1,5 @@
 pcb/footprints/.svg2shenzhen-cache
+.esphome/
+__pycache__/
+test-firmware/.pio/
+firmware/bin/
