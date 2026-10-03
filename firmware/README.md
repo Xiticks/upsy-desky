@@ -19,6 +19,38 @@ Major parts of the config are separated into "addons" so they can be easily incl
 - `button-record-simple.yaml`: Observes the stock Jarvis/Uplift keypad GPIOs and decodes button presses
 - `keypad-events.yaml`: Provides the native keypad event and latest-action entities; included by the scanner
 
+## Native OTA encryption
+
+`stock.yaml` disables firmware uploads through the normal web interface because
+that plaintext endpoint bypasses native OTA encryption. Use the ESPHome
+Dashboard or native OTA for normal updates. Browser uploads remain available
+while the captive portal is active on the fallback Wi-Fi access point; USB
+flashing is also unchanged.
+
+The browser OTA instructions in the [published firmware guide](https://upsy-desky.tjhorner.dev/docs/firmware-updates/)
+apply to configurations that enable normal web OTA, not this stock configuration.
+
+For ESPHome 2026.9 or newer, configure encrypted native OTA in the consuming
+device YAML:
+
+```yaml
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  platform: esphome
+  encryption:
+```
+
+The single-platform `ota` mapping replaces the stock package's OTA list.
+Adding another `platform: esphome` list entry instead produces the duplicate-port
+warning. Native OTA inherits the API encryption key; omit `password` when using
+encryption. The stock package already disables normal web OTA.
+
+For existing devices, follow [ESPHome's encryption migration steps](https://esphome.io/components/ota/esphome/#enabling-encryption-on-an-existing-device)
+before requiring encrypted OTA.
+
 ## Keypad events
 
 `base.yaml` includes the Jarvis/Uplift GPIO scanner. `Keypad Button` is a native

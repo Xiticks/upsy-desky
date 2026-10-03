@@ -29,6 +29,7 @@ api:
 
 web_server:
   port: 80
+  ota: false
   version: 2
   js_url: "https://upsy-desky.tjhorner.dev/esphome-webserver/www.js"
 
