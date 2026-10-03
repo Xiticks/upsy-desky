@@ -10,6 +10,16 @@ substitutions:
   upsy_keypad_scan_interval: "5ms"
   upsy_keypad_debounce_ms: "30"
 
+  # Event types can be overridden from the consuming configuration.
+  upsy_keypad_event_up: "up"
+  upsy_keypad_event_down: "down"
+  upsy_keypad_event_preset_1: "preset_1"
+  upsy_keypad_event_preset_2: "preset_2"
+  upsy_keypad_event_preset_3: "preset_3"
+  upsy_keypad_event_preset_4: "preset_4"
+  upsy_keypad_event_memory: "memory"
+  upsy_keypad_event_unknown: "unknown"
+
   # Masks use button_bit1_pin/button_bit2_pin/button_bit4_pin/button_m_pin.
   # Defaults match the existing Upsy preset outputs (Jarvis/Uplift wiring).
   # Override these for a handset with different button encoding.
@@ -33,14 +43,14 @@ esphome:
 event:
   - id: !extend upsy_keypad_button_event
     event_types:
-      - up
-      - down
-      - preset_1
-      - preset_2
-      - preset_3
-      - preset_4
-      - memory
-      - unknown
+      - "${upsy_keypad_event_up}"
+      - "${upsy_keypad_event_down}"
+      - "${upsy_keypad_event_preset_1}"
+      - "${upsy_keypad_event_preset_2}"
+      - "${upsy_keypad_event_preset_3}"
+      - "${upsy_keypad_event_preset_4}"
+      - "${upsy_keypad_event_memory}"
+      - "${upsy_keypad_event_unknown}"
 
 # Enable observation on every output sharing a handset line. Open-drain output
 # mode is provided by base.yaml and presets.yaml independently of this addon.
@@ -169,20 +179,20 @@ interval:
             return;
           }
 
-          std::string button_name = "unknown";
+          std::string button_name = "${upsy_keypad_event_unknown}";
           if (source != 3) {
             if (source == 1 && mask == ${upsy_keypad_physical_memory_mask}) {
-              button_name = "memory";
+              button_name = "${upsy_keypad_event_memory}";
             } else {
               switch (mask) {
-                case ${upsy_keypad_up_mask}: button_name = "up"; break;
-                case ${upsy_keypad_down_mask}: button_name = "down"; break;
-                case ${upsy_keypad_preset_1_mask}: button_name = "preset_1"; break;
-                case ${upsy_keypad_preset_2_mask}: button_name = "preset_2"; break;
-                case ${upsy_keypad_preset_3_mask}: button_name = "preset_3"; break;
-                case ${upsy_keypad_preset_4_mask}: button_name = "preset_4"; break;
+                case ${upsy_keypad_up_mask}: button_name = "${upsy_keypad_event_up}"; break;
+                case ${upsy_keypad_down_mask}: button_name = "${upsy_keypad_event_down}"; break;
+                case ${upsy_keypad_preset_1_mask}: button_name = "${upsy_keypad_event_preset_1}"; break;
+                case ${upsy_keypad_preset_2_mask}: button_name = "${upsy_keypad_event_preset_2}"; break;
+                case ${upsy_keypad_preset_3_mask}: button_name = "${upsy_keypad_event_preset_3}"; break;
+                case ${upsy_keypad_preset_4_mask}: button_name = "${upsy_keypad_event_preset_4}"; break;
                 case ${upsy_keypad_memory_mask}:
-                  if (source == 2) button_name = "memory";
+                  if (source == 2) button_name = "${upsy_keypad_event_memory}";
                   break;
               }
             }

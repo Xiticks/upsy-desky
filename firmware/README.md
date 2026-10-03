@@ -27,6 +27,16 @@ ESPHome event entity with types `up`, `down`, `preset_1` through `preset_4`,
 presses of the same button still trigger. ESPHome event entities require
 Home Assistant Core 2024.5 or newer and do not require HA action permission.
 
+Override an event type with `upsy_keypad_event_<type>` substitutions. For example:
+
+```yaml
+substitutions:
+  upsy_keypad_event_preset_1: "1"
+```
+
+This changes both the declared event type and the emitted value, including
+`Last Keypad Button`. The other event types keep their defaults.
+
 The scanner samples the four active-low handset lines every 5ms and debounces
 the complete mask and its source for 30ms. Each stable nonzero mask/source
 change emits once; a held, unchanged button does not repeat. Memory followed by
