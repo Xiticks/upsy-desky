@@ -34,7 +34,8 @@ web_server:
 
 ota:
   - platform: esphome
-    password: ""
+    # Set a password only when OTA encryption is not enabled.
+    # password: ""
 
 dashboard_import:
   package_import_url: github://tjhorner/upsy-desky/firmware/stock.yaml@v4.0.2
