@@ -50,6 +50,20 @@ packages:
   addon_stable_ids: !include addons/stable-ids.yaml
   addon_runtime_config: !include addons/runtime-config.yaml
 
+# Shared handset lines must be released when inactive.
+output:
+  - id: !extend standing_desk_up_pin
+    pin:
+      mode:
+        output: true
+        open_drain: true
+
+  - id: !extend standing_desk_down_pin
+    pin:
+      mode:
+        output: true
+        open_drain: true
+
 button:
   - platform: restart
     name: "Restart"

@@ -5,6 +5,9 @@ output:
     pin:
       number: ${button_bit1_pin}
       allow_other_uses: true
+      mode:
+        output: true
+        open_drain: true
 
   - platform: gpio
     inverted: true
@@ -12,18 +15,27 @@ output:
     pin:
       number: ${button_bit2_pin}
       allow_other_uses: true
+      mode:
+        output: true
+        open_drain: true
 
   - platform: gpio
     inverted: true
     id: button_bit4
     pin:
       number: ${button_bit4_pin}
+      mode:
+        output: true
+        open_drain: true
 
   - platform: gpio
     inverted: true
     id: button_m
     pin:
       number: ${button_m_pin}
+      mode:
+        output: true
+        open_drain: true
 
 button:
   # Recall Presets
