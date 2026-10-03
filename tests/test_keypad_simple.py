@@ -112,8 +112,8 @@ class SimpleKeypadTests(keypad.KeypadTests):
         }
         """
         keypad.KeypadTests().run_cpp(body.replace("EVENT_COUNT", "1")
-                                    .replace("LAST_BUTTON", '"preset_1"')
-                                    .replace("LAST_MASK", "3"))
+                                     .replace("LAST_BUTTON", '"preset_1"')
+                                     .replace("LAST_MASK", "3"))
         self.run_cpp(body.replace("EVENT_COUNT", "2")
                      .replace("LAST_BUTTON", '"preset_2"')
                      .replace("LAST_MASK", "4"))
@@ -128,7 +128,7 @@ class SimpleKeypadTests(keypad.KeypadTests):
         }
         """
         keypad.KeypadTests().run_cpp(body.replace("EVENT_COUNT", "1")
-                                    .replace("LAST_SOURCE", '"virtual_control"'))
+                                     .replace("LAST_SOURCE", '"virtual_control"'))
         self.run_cpp(body.replace("EVENT_COUNT", "2")
                      .replace("LAST_SOURCE", '"physical_keypad"'))
 
@@ -144,8 +144,8 @@ class SimpleKeypadTests(keypad.KeypadTests):
         """
         overrides = {"upsy_keypad_physical_memory_mask": "0x0A"}
         keypad.KeypadTests().run_cpp(body.replace("EVENT_COUNT", "1")
-                                    .replace("LAST_BUTTON", '"memory"')
-                                    .replace("LAST_MASK", "10"), overrides)
+                                     .replace("LAST_BUTTON", '"memory"')
+                                     .replace("LAST_MASK", "10"), overrides)
         self.run_cpp(body.replace("EVENT_COUNT", "2")
                      .replace("LAST_BUTTON", '"preset_1"')
                      .replace("LAST_MASK", "3"), overrides)
@@ -153,6 +153,34 @@ class SimpleKeypadTests(keypad.KeypadTests):
 
 @unittest.skipUnless(importlib.util.find_spec("esphome"), "install ESPHome to check package merging")
 class SimpleKeypadConfigTests(unittest.TestCase):
+    def test_consuming_config_overrides_physical_memory(self):
+        from esphome.config import read_config
+        from esphome.core import CORE
+
+        cache = os.environ.get("ESPHOME_DATA_DIR", str(
+            keypad.ROOT / "firmware/.esphome"))
+        with tempfile.TemporaryDirectory(prefix="upsy-keypad-memory-") as folder:
+            project = Path(folder)
+            shutil.copytree(keypad.ROOT / "firmware", project / "firmware",
+                            ignore=shutil.ignore_patterns(".esphome", "__pycache__"))
+            device = project / "device.yaml"
+            for memory_mask in ("0x0A", "0x08"):
+                with self.subTest(memory_mask=memory_mask):
+                    contents = "packages:\n  stock: !include firmware/stock.yaml\n"
+                    if memory_mask == "0x08":
+                        contents += "substitutions:\n  upsy_keypad_physical_memory_mask: \"0x08\"\n"
+                    device.write_text(contents)
+                    CORE.reset()
+                    CORE.config_path = device
+                    with patch.dict(os.environ, {"ESPHOME_DATA_DIR": cache}):
+                        config = read_config({}, skip_external_update=True)
+                    self.assertIsNotNone(config)
+                    scan = next(item for item in config["interval"]
+                                if str(item["id"]) == "upsy_keypad_simple_scan")
+                    code = scan["then"][0]["lambda"].value
+                    self.assertIn(f"source == 1 && mask == {memory_mask}", code)
+                    self.assertIn("case 0x08:", code)
+
     def test_only_scanner_changes(self):
         from esphome.config import read_config
         from esphome.core import CORE, ID, Lambda
@@ -179,25 +207,28 @@ class SimpleKeypadConfigTests(unittest.TestCase):
 
         # Exercise either addon as the sole keypad include in the real base.
         # Keep remote dependency caches outside the temporary configuration.
-        cache = os.environ.get("ESPHOME_DATA_DIR", str(keypad.ROOT / "firmware/.esphome"))
+        cache = os.environ.get("ESPHOME_DATA_DIR", str(
+            keypad.ROOT / "firmware/.esphome"))
         with tempfile.TemporaryDirectory(prefix="upsy-keypad-config-") as folder:
             project = Path(folder)
             shutil.copytree(keypad.ROOT / "firmware", project / "firmware",
                             ignore=shutil.ignore_patterns(".esphome", "__pycache__"))
             (project / "tests").mkdir()
-            shutil.copy2(keypad.ROOT / "tests/keypad-simple.yaml", project / "tests/keypad-simple.yaml")
+            shutil.copy2(keypad.ROOT / "tests/keypad-simple.yaml",
+                         project / "tests/keypad-simple.yaml")
             base_path = project / "firmware/base.yaml"
             base = base_path.read_text()
             with patch.dict(os.environ, {"ESPHOME_DATA_DIR": cache}):
                 base_path.write_text(re.sub(r"addon_button_record: !include addons/button-record[^\n]*",
-                                           "addon_button_record: !include addons/button-record.yaml", base))
+                                            "addon_button_record: !include addons/button-record.yaml", base))
                 normal = load(project / "firmware/stock.yaml")
                 base_path.write_text(re.sub(r"addon_button_record: !include addons/button-record[^\n]*",
-                                           "addon_button_record: !include addons/button-record-simple.yaml", base))
+                                            "addon_button_record: !include addons/button-record-simple.yaml", base))
                 simple = load(project / "tests/keypad-simple.yaml")
         for domain in ("output", "uart", "button", "number", "sensor", "event", "text_sensor", "script"):
             with self.subTest(domain=domain):
-                self.assertEqual(normalize(normal[domain]), normalize(simple[domain]))
+                self.assertEqual(
+                    normalize(normal[domain]), normalize(simple[domain]))
         self.assertEqual(normalize(normal["esphome"]["on_boot"]),
                          normalize(simple["esphome"]["on_boot"]))
         self.assertEqual(len(normal["interval"]), 2)
@@ -215,6 +246,8 @@ class SimpleKeypadConfigTests(unittest.TestCase):
         scan = next(item for item in simple["interval"]
                     if str(item["id"]) == "upsy_keypad_simple_scan")
         self.assertEqual(len(scan["then"]), 1)
-        normal_retry = [item for item in normal["interval"] if str(item["id"]) != "upsy_keypad_scan"]
-        simple_retry = [item for item in simple["interval"] if str(item["id"]) != "upsy_keypad_simple_scan"]
+        normal_retry = [item for item in normal["interval"]
+                        if str(item["id"]) != "upsy_keypad_scan"]
+        simple_retry = [item for item in simple["interval"]
+                        if str(item["id"]) != "upsy_keypad_simple_scan"]
         self.assertEqual(normalize(normal_retry), normalize(simple_retry))

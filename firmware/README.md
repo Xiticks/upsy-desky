@@ -76,9 +76,7 @@ Use distinct nonzero masks and verify the raw-mask diagnostic. These settings
 change observation labels; custom preset output actions must still match the
 handset. Unknown stable patterns emit `unknown`.
 
-The raw-mask diagnostic is decimal: `10` means `0x0A` (Memory + Down), while
-`0x10` is decimal 16 and cannot occur with four lines. A handset whose physical
-Memory button reports `10` can use:
+Default physical Memorty detection can be overridden with:
 
 ```yaml
 substitutions:

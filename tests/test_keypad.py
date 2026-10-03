@@ -25,6 +25,7 @@ def substitutions(text):
 
 def substitute(code, overrides=None, addon=ADDON):
     values = substitutions(BASE) | substitutions(addon) | (overrides or {})
+
     def resolve(match):
         return re.sub(r"\$\{(\w+)\}", resolve, values[match[1]])
     return re.sub(r"\$\{(\w+)\}", resolve, code)
@@ -32,7 +33,8 @@ def substitute(code, overrides=None, addon=ADDON):
 
 def scanner(overrides=None, addon=ADDON):
     # Extract production code rather than maintaining a test copy of it.
-    code = textwrap.dedent(addon.split("interval:\n", 1)[1].split("lambda: |-\n", 1)[1])
+    code = textwrap.dedent(addon.split("interval:\n", 1)[
+                           1].split("lambda: |-\n", 1)[1])
     globals_code = "\n".join(
         f"{kind} {name} = {initial};"
         for name, kind, initial in re.findall(
@@ -173,7 +175,8 @@ class KeypadTests(unittest.TestCase):
             helpers = HELPERS
             if "  - id: upsy_keypad_armed\n" not in self.addon:
                 helpers = helpers.replace("  upsy_keypad_armed = true;\n", "")
-            cpp.write_text(PRELUDE + scanner(overrides, self.addon) + helpers + body)
+            cpp.write_text(PRELUDE + scanner(overrides,
+                           self.addon) + helpers + body)
             binary = folder / "test"
             command = ["g++", "-std=c++17", "-g",
                        "-I", str(folder)]
@@ -181,7 +184,8 @@ class KeypadTests(unittest.TestCase):
                 command += ["-I", str(upstream)]
             command += [str(cpp), *sources, "-o", str(binary)]
             if expected_error:
-                result = subprocess.run(command, capture_output=True, text=True)
+                result = subprocess.run(
+                    command, capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected_error, result.stderr)
                 return
@@ -191,7 +195,7 @@ class KeypadTests(unittest.TestCase):
     def test_all_buttons_and_repeated_presses(self):
         self.run_cpp(r"""
         int main() {
-          const uint8_t masks[] = {1, 2, 3, 4, 6, 5, 8, 15};
+          const uint8_t masks[] = {1, 2, 3, 4, 6, 5, 10, 15};
           const char *buttons[] = {"up", "down", "preset_1", "preset_2",
                                    "preset_3", "preset_4", "memory", "unknown"};
           for (int n = 0; n < 8; ++n) {
@@ -296,6 +300,24 @@ class KeypadTests(unittest.TestCase):
         }
         """, {"upsy_keypad_memory_mask": "0x0A"})
 
+    def test_physical_memory_mask_override(self):
+        self.run_cpp(r"""
+        int main() {
+          reset_scanner(); hold(8);
+          expect("memory", "physical_keypad", 8);
+          hold(0); hold(0, 8);
+          expect("memory", "virtual_control", 8);
+          hold(0, 3);
+          assert(publisher.events.size() == 3);
+          expect("preset_1", "virtual_control", 3);
+
+          reset_scanner(); hold(10);
+          expect("unknown", "physical_keypad", 10);
+          reset_scanner(); hold(2, 8);
+          expect("unknown", "mixed_input", 10);
+        }
+        """, {"upsy_keypad_physical_memory_mask": "0x08"})
+
     def test_clock_wraparound(self):
         self.run_cpp(r"""
         int main() {
@@ -337,7 +359,7 @@ class KeypadTests(unittest.TestCase):
 
     def test_native_publication_order_and_repeated_events(self):
         code = textwrap.dedent(PUBLISHER.split("script:\n", 1)[1]
-                                   .split("lambda: |-\n", 1)[1])
+                               .split("lambda: |-\n", 1)[1])
         self.run_cpp(r"""
         struct TextState {
           std::string state;
@@ -369,18 +391,20 @@ class KeypadTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("STANDING_DESK_SOURCE"),
                          "set STANDING_DESK_SOURCE to test actual upstream UART code")
     def test_height_movement_and_late_startup(self):
-        upstream = Path(os.environ["STANDING_DESK_SOURCE"]) / "components/standing_desk_height"
+        upstream = Path(os.environ["STANDING_DESK_SOURCE"]
+                        ) / "components/standing_desk_height"
         # Also compile the retry condition from base.yaml for auto and fixed variants.
         condition = textwrap.dedent(BASE.split("interval:\n", 1)[1]
-                                   .split("lambda: |-\n", 1)[1].split("          then:", 1)[0])
+                                    .split("lambda: |-\n", 1)[1].split("          then:", 1)[0])
         retry_auto = substitute(condition)
-        retry_fixed = substitute(condition, {"standing_desk_variant": "jarvis"})
+        retry_fixed = substitute(
+            condition, {"standing_desk_variant": "jarvis"})
         self.run_cpp(r"""
         #include "standing_desk_height.h"
         using namespace esphome::standing_desk_height;
         bool retry_auto(StandingDeskHeightSensor *desk_height) {
         """ + retry_auto + "\n}\n" +
-        "bool retry_fixed(StandingDeskHeightSensor *desk_height) {\n" + retry_fixed + r"""
+                     "bool retry_fixed(StandingDeskHeightSensor *desk_height) {\n" + retry_fixed + r"""
         }
         void feed(StandingDeskHeightSensor &desk, std::initializer_list<uint8_t> bytes) {
           for (uint8_t b : bytes) {

@@ -22,7 +22,7 @@ substitutions:
   upsy_keypad_memory_mask: "0x08"
   # Physical handsets may combine Memory with another line. Firmware store
   # commands still use upsy_keypad_memory_mask, matching the preset outputs.
-  upsy_keypad_physical_memory_mask: "0x10"
+  upsy_keypad_physical_memory_mask: "0x0A"
 
 esphome:
   # Read open-drain output latches to distinguish firmware and handset activity.
