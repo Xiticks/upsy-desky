@@ -39,4 +39,4 @@ ota:
     # password: ""
 
 dashboard_import:
-  package_import_url: github://tjhorner/upsy-desky/firmware/stock.yaml@v5.0.2
+  package_import_url: github://Xiticks/upsy-desky/firmware/stock.yaml@feature-18-keypad-events
