@@ -11,3 +11,66 @@ text_sensor:
   - platform: debug
     device:
       name: "Device Info"
+
+sensor:
+  - platform: debug
+    free:
+      name: "Heap Free"
+    block:
+      name: "Heap Max Block"
+    loop_time:
+      name: "Loop Time"
+
+# Observe bytes consumed by the existing height component; never compete for RX.
+uart:
+  debug:
+    direction: RX
+    dummy_receiver: false
+    after:
+      bytes: 64
+      timeout: 100ms
+    sequence:
+      - lambda: |-
+          id(upsy_debug_rx_bytes) += bytes.size();
+          id(upsy_debug_rx_at) = millis();
+          static uint32_t logged_at = 0;
+          if (static_cast<uint32_t>(millis() - logged_at) >= 5000U) {
+            logged_at = millis();
+            ESP_LOGD("upsy_desk_debug", "RX sample: %s", format_hex_pretty(bytes).c_str());
+          }
+
+globals:
+  - id: upsy_debug_rx_bytes
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+  - id: upsy_debug_rx_at
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          static uint32_t previous_rx_bytes = 0;
+          const uint32_t rx_bytes = id(upsy_debug_rx_bytes);
+          ESP_LOGD("upsy_desk_debug",
+                   "RX bytes/5s=%" PRIu32 ", RX total=%" PRIu32 ", RX age=%" PRIu32
+                   "ms, decoded=%.1f, published_raw=%.1f, published=%.1f",
+                   rx_bytes - previous_rx_bytes, rx_bytes,
+                   static_cast<uint32_t>(millis() - id(upsy_debug_rx_at)),
+                   id(desk_height).get_last_read(), id(desk_height).get_raw_state(),
+                   id(desk_height).get_state());
+          previous_rx_bytes = rx_bytes;
+
+# Isolate the wake part of Re-Detect Decoder without replacing the decoder.
+button:
+  - platform: template
+    name: "Wake Desk (Diagnostic)"
+    entity_category: diagnostic
+    on_press:
+      - uart.write:
+          id: handset_tx
+          data: [ 0x0 ]

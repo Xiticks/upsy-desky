@@ -7,7 +7,7 @@ substitutions:
   # Disable for an unverified keypad: no GPIO observation or input enablement.
   # Movement and preset outputs remain open-drain independently of scanning.
   upsy_keypad_gpio_enabled: "true"
-  upsy_keypad_scan_interval: "5ms"
+  upsy_keypad_scan_interval: "20ms"
   upsy_keypad_debounce_ms: "30"
 
   # Event types can be overridden from the consuming configuration.
@@ -37,7 +37,6 @@ substitutions:
 esphome:
   # Read open-drain output latches to distinguish firmware and handset activity.
   includes:
-    - <driver/gpio.h>
     - <soc/gpio_struct.h>
 
 event:
@@ -130,22 +129,26 @@ interval:
     then:
       - lambda: |-
           if (!${upsy_keypad_gpio_enabled}) {
+            id(upsy_keypad_simple_scan).stop_poller();
             return;
           }
 
           const int pins[] = {
               ${button_bit1_pin}, ${button_bit2_pin},
               ${button_bit4_pin}, ${button_m_pin}};
+          // Sample each bank once so lines in the same bank share a snapshot.
+          const uint32_t levels[] = {GPIO.in, GPIO.in1.val};
+          const uint32_t latches[] = {GPIO.out, GPIO.out1.val};
           uint8_t raw_mask = 0;
           uint8_t firmware_mask = 0;
           for (int bit = 0; bit < 4; ++bit) {
             const int pin = pins[bit];
-            if (gpio_get_level(static_cast<gpio_num_t>(pin)) == 0) {
+            const uint32_t pin_mask = 1UL << (pin % 32);
+            if ((levels[pin / 32] & pin_mask) == 0) {
               raw_mask |= 1U << bit;
             }
             // Open-drain latch: zero drives low, one releases the wire.
-            const uint32_t latch = pin < 32 ? GPIO.out : GPIO.out1.val;
-            if ((latch & (1UL << (pin % 32))) == 0) {
+            if ((latches[pin / 32] & pin_mask) == 0) {
               firmware_mask |= 1U << bit;
             }
           }
@@ -158,19 +161,19 @@ interval:
             source = 1;
           }
           const uint8_t mask = source == 2 ? firmware_mask : raw_mask;
-          const uint32_t now = millis();
-
           if (mask != id(upsy_keypad_candidate_mask) ||
               source != id(upsy_keypad_candidate_source)) {
             id(upsy_keypad_candidate_mask) = mask;
             id(upsy_keypad_candidate_source) = source;
-            id(upsy_keypad_candidate_since) = now;
+            id(upsy_keypad_candidate_since) = millis();
             return;
           }
-          if (static_cast<uint32_t>(now - id(upsy_keypad_candidate_since)) <
-              ${upsy_keypad_debounce_ms}U ||
-              (mask == id(upsy_keypad_stable_mask) &&
-               source == id(upsy_keypad_stable_source))) {
+          if (mask == id(upsy_keypad_stable_mask) &&
+              source == id(upsy_keypad_stable_source)) {
+            return;
+          }
+          if (static_cast<uint32_t>(millis() - id(upsy_keypad_candidate_since)) <
+              ${upsy_keypad_debounce_ms}U) {
             return;
           }
           id(upsy_keypad_stable_mask) = mask;

@@ -69,11 +69,16 @@ substitutions:
 This changes both the declared event type and the emitted value, including
 `Last Keypad Button`. The other event types keep their defaults.
 
-The scanner samples the four active-low handset lines every 5ms and debounces
-the complete mask and its source for 30ms. Each stable nonzero mask/source
+The scanner samples the four active-low handset lines every 20ms and debounces
+the complete mask and its source for 30ms. With regular polling, a change is
+reported about 40–60ms after it occurs. Each stable nonzero mask/source
 change emits once; a held, unchanged button does not repeat. Memory followed by
 a preset can emit both without a full release. Stable partial-contact changes
-can also emit another button, and presses shorter than debounce are filtered.
+can also emit another button. Very short presses or release gaps can be missed;
+allow more than 60ms for each with the default timing. Scheduler delays can
+increase this. Timing remains configurable with `upsy_keypad_scan_interval`
+and `upsy_keypad_debounce_ms`. A 50ms interval can take up to 100ms to detect a
+change and may miss the existing 100ms virtual button pulses.
 
 Physical Memory defaults to `0x0A` (Memory plus bit 2). For a handset using
 Memory alone, override it in the consuming ESPHome configuration:
@@ -101,3 +106,37 @@ disable observation and inferred events without changing output modes:
 substitutions:
   upsy_keypad_gpio_enabled: "false"
 ```
+
+## Diagnosing stalled height updates
+
+Use `debug.yaml` instead of `stock.yaml` in the consuming configuration to add
+heap, loop-time and reset diagnostics. It also logs a UART RX sample and an
+RX/height summary approximately every five seconds at DEBUG level. The UART
+debugger uses `dummy_receiver: false`: it observes reads by the existing height
+component rather than consuming notifications itself. No automatic wake or
+decoder reset is performed.
+
+When the height stops updating, capture logs while moving the desk:
+
+- Repeated `RX bytes/5s=0` while moving means no new RX debug batches were
+  reported. Check wake/reporting, UART errors and device uptime.
+- RX samples containing changing heights while `decoded` stays unchanged point
+  towards a decoder/protocol problem. Unchanged values while stationary are
+  normal; RX traffic alone does not prove that valid height frames were decoded.
+- `decoded` changing while `published_raw` stays unchanged across multiple
+  summaries points towards sensor publication. If only
+  `published` differs, check any configured sensor filters. If local values
+  update but Home Assistant does not, investigate the API/connection instead.
+
+The RX age is measured when a debug batch is delivered, not on each valid
+height frame; before any RX, use the zero total to identify missing data.
+Samples may contain partial or multiple frames.
+
+Try `Wake Desk (Diagnostic)` first. It sends the same wake byte as
+`Re-Detect Decoder` without replacing the parser. If waking alone does not
+help, capture logs from `Re-Detect Decoder`, including the selected variant.
+That button both wakes the desk and recreates the decoder, so recovery alone
+does not identify which operation helped. If logs establish the correct
+variant, test `standing_desk_variant: "jarvis"` (or the observed variant) to
+separate automatic detection from ongoing parsing. Do not infer the height
+protocol solely from the keypad masks.
